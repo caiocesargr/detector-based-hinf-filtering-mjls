@@ -15,6 +15,9 @@ from detector_hinf.models import (
     example1_detector_generators,
     example1_emission_matrix,
     example1_system,
+    example2_detector_generators,
+    example2_emission_matrix,
+    example2_markov_generator,
 )
 
 
@@ -213,6 +216,25 @@ def test_augmented_generator_with_three_symbols_preserves_plant_rates():
             np.testing.assert_allclose(block.sum(axis=1), Lambda[i, j], atol=1e-12)
     for actual, original in zip([Lambda, Upsilon, detectors[0]], before):
         np.testing.assert_array_equal(actual, original)
+
+
+def test_example2_augmented_generator():
+    Upsilon = example2_emission_matrix()
+    assert Upsilon.shape == (2, 3)
+    augmented = build_augmented_generator(
+        example2_markov_generator(), example2_detector_generators(),
+        Upsilon, epsilon=0.0075,
+    )
+    assert augmented.shape == (6, 6)
+    assert np.all(np.isfinite(augmented))
+    np.testing.assert_allclose(augmented.sum(axis=1), 0.0, rtol=0, atol=1e-12)
+    assert np.all(augmented[~np.eye(6, dtype=bool)] >= 0.0)
+    # Plant jumps use the destination mode's distribution over three symbols.
+    np.testing.assert_allclose(augmented[:3, 3:], [[0., 1.25, 1.25]] * 3)
+    np.testing.assert_allclose(augmented[3:, :3], [[9., 0., 0.]] * 3)
+    # Check epsilon scaling in each of the two detector blocks.
+    np.testing.assert_allclose(augmented[0, 1], 1e-5 / 0.0075)
+    np.testing.assert_allclose(augmented[3, 4], 0.5 / 0.0075)
 
 
 def test_augmented_generator_single_absorbing_state():
