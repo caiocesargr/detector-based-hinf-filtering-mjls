@@ -59,3 +59,31 @@ def psi_map(Upsilon, tol=1e-12):
         for mode in component:
             psi[mode] = index
     return psi
+
+
+def weighted_detector_average(Upsilon, mode, matrices):
+    """Return sum_ell Upsilon[mode, ell] * matrices[ell] as a NumPy array.
+
+    Mode and detector-symbol indices are zero-based. Supply one numeric,
+    two-dimensional matrix per detector symbol, all with the same shape.
+    Only strictly positive probabilities contribute, without thresholding
+    or renormalization. An all-zero row returns a zero matrix. Inputs are
+    not modified, and zero-probability matrices are not multiplied or added.
+    """
+    symbols = detector_symbol_sets(Upsilon, tol=0.0)
+    Upsilon = np.asarray(Upsilon, dtype=float)
+    if not isinstance(mode, (int, np.integer)) or not 0 <= mode < len(symbols):
+        raise ValueError("mode must be a valid zero-based integer mode index.")
+    if len(matrices) != Upsilon.shape[1]:
+        raise ValueError("Supply one matrix per detector symbol.")
+    arrays = [np.asarray(matrix) for matrix in matrices]
+    shape = arrays[0].shape
+    if any(matrix.ndim != 2 or matrix.shape != shape for matrix in arrays):
+        raise ValueError("All matrices must be two-dimensional with the same shape.")
+    if any(matrix.dtype.kind not in "biufc" for matrix in arrays):
+        raise ValueError("Matrices must contain numeric entries.")
+    dtype = np.result_type(float, *(matrix.dtype for matrix in arrays))
+    average = np.zeros(shape, dtype=dtype)
+    for ell in sorted(symbols[mode]):
+        average += Upsilon[mode, ell] * arrays[ell]
+    return average
