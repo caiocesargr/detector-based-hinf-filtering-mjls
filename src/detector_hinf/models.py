@@ -103,3 +103,40 @@ def example2_emission_matrix():
     finite-rate generators returned by example2_detector_generators.
     """
     return np.array([[1.0, 0.0, 0.0], [0.0, 0.5, 0.5]])
+
+
+def example2_uav_system():
+    """Return ``(system, metadata)`` for the Example 2 UAV plant.
+
+    ``system`` is the tuple (A, B, C, D, L, F, Lambda), compatible with the
+    LMI builders. Each mode-dependent quantity is a list of two floating-
+    point arrays, indexed 0 and 1 for the paper's modes 1 and 2. Dimensions
+    are nx=4, nw=1, ny=2, nz=1; scalar F entries remain (1, 1) matrices.
+
+    The paper also prints C3 despite defining only two plant modes.
+    It is preserved as metadata["C3_reported"], separately from C, and is
+    not used as a plant mode. Pass only ``system`` to the LMI builders.
+    All arrays are freshly allocated, with no sharing between plant modes.
+    """
+    common_A = np.array([
+        [-0.3522, 0.2585, -4.2749, -9.4851],
+        [-0.6782, -1.8272, 16.4537, -2.4644],
+        [0.0948, -0.3649, -0.3392, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ])
+    kappa = (0.1, 0.75)
+    b0 = np.array([[-0.6759], [2.6014], [-8.4335], [0.0]])
+    A = [common_A.copy(), common_A.copy()]
+    B = [value * b0 for value in kappa]
+    C = [
+        np.array([[0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]]),
+        np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]),
+    ]
+    D = [value * np.ones((2, 1)) for value in kappa]
+    L = [np.array([[0.0, 0.0, 0.0, 1.0]]) for _ in kappa]
+    F = [np.array([[value]]) for value in kappa]
+    metadata = {
+        "nx": 4, "nw": 1, "ny": 2, "nz": 1,
+        "C3_reported": np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]),
+    }
+    return (A, B, C, D, L, F, example2_markov_generator()), metadata

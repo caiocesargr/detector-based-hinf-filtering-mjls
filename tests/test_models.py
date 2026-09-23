@@ -10,6 +10,7 @@ from detector_hinf.models import (
     example2_detector_generators,
     example2_emission_matrix,
     example2_markov_generator,
+    example2_uav_system,
 )
 
 
@@ -124,3 +125,52 @@ def test_example2_stationary_distributions_approximate_reported_emissions(mode):
     expected_residual = np.array([[-2e-5, 1e-5, 1e-5], [2e-5, -1e-5, -1e-5]])
     np.testing.assert_allclose(reported @ generator, expected_residual[mode],
                                rtol=1e-12, atol=1e-15)
+
+
+def test_example2_uav_dimensions_and_metadata():
+    system, metadata = example2_uav_system()
+    assert len(system) == 7
+    for matrices, shape in zip(system[:-1], [(4, 4), (4, 1), (2, 4), (2, 1), (1, 4), (1, 1)]):
+        assert isinstance(matrices, list) and len(matrices) == 2
+        for matrix in matrices:
+            assert matrix.shape == shape
+            assert matrix.dtype.kind == "f"
+            assert np.all(np.isfinite(matrix))
+    assert system[-1].shape == (2, 2)
+    np.testing.assert_array_equal(system[-1], example2_markov_generator())
+    assert [metadata[key] for key in ("nx", "nw", "ny", "nz")] == [4, 1, 2, 1]
+    np.testing.assert_array_equal(metadata["C3_reported"], [[1, 0, 0, 0], [0, 1, 0, 0]])
+    # The reported extra matrix is not a third plant measurement mode.
+    assert len(system[2]) == 2
+    assert all(not np.array_equal(C, metadata["C3_reported"]) for C in system[2])
+
+
+def test_example2_uav_matrix_values():
+    (A, B, C, D, L, F, _), _ = example2_uav_system()
+    expected_A = [
+        [-0.3522, 0.2585, -4.2749, -9.4851],
+        [-0.6782, -1.8272, 16.4537, -2.4644],
+        [0.0948, -0.3649, -0.3392, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ]
+    expected_B = [[[-0.06759], [0.26014], [-0.84335], [0.0]],
+                  [[-0.506925], [1.95105], [-6.325125], [0.0]]]
+    for i, kappa in enumerate((0.1, 0.75)):
+        np.testing.assert_array_equal(A[i], expected_A)
+        np.testing.assert_allclose(B[i], expected_B[i], rtol=1e-14, atol=0)
+        np.testing.assert_array_equal(D[i], [[kappa], [kappa]])
+        np.testing.assert_array_equal(L[i], [[0, 0, 0, 1]])
+        np.testing.assert_array_equal(F[i], [[kappa]])
+    np.testing.assert_array_equal(C[0], [[0, 1, 0, 0], [0, 0, 1, 0]])
+    np.testing.assert_array_equal(C[1], [[1, 0, 0, 0], [0, 0, 0, 1]])
+
+
+def test_example2_uav_returns_independent_arrays():
+    system, metadata = example2_uav_system()
+    other_system, other_metadata = example2_uav_system()
+    for matrices, other_matrices in zip(system[:-1], other_system[:-1]):
+        assert not np.shares_memory(matrices[0], matrices[1])
+        for matrix, other in zip(matrices, other_matrices):
+            assert not np.shares_memory(matrix, other)
+    assert not np.shares_memory(system[-1], other_system[-1])
+    assert not np.shares_memory(metadata["C3_reported"], other_metadata["C3_reported"])
