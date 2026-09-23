@@ -140,3 +140,54 @@ def example2_uav_system():
         "C3_reported": np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]),
     }
     return (A, B, C, D, L, F, example2_markov_generator()), metadata
+
+
+def example2_published_algorithm1_filter():
+    """Return the reported Example 2 filter coefficients, equations (31)--(34).
+
+    These are the published, rounded coefficients, not recomputed values.
+    The dictionary contains lists Ahat, Bhat, Lhat and Ehat, indexed 0, 1, 2
+    for the paper's three detector symbols. Output matrices retain their
+    row dimensions. Every call returns fresh arrays. In particular, the
+    different signs of Lhat[1][0, 0] and Lhat[2][0, 0] are preserved.
+    """
+    return {
+        "Ahat": [
+            np.array([
+                [-0.4909, 1.6449, 7.0568, -10.1235],
+                [-0.4495, -2.5936, -10.3426, -1.7301],
+                [0.3088, -1.5673, -12.8811, 0.5624],
+                [0.0168, -0.1864, -0.9238, 0.0430],
+            ]),
+            np.array([
+                [-2.1949, 0.0453, -3.4600, -8.3031],
+                [-4.6543, -1.1802, 12.8955, -1.7358],
+                [2.0374, -0.2934, -0.5449, 6.8335],
+                [0.2390, 0.0467, 0.8189, -0.3431],
+            ]),
+            np.array([
+                [-2.1675, 0.0658, -3.4484, -8.3100],
+                [-4.6762, -1.2097, 12.8756, -1.7178],
+                [2.0214, -0.3014, -0.5484, 6.8340],
+                [0.2355, 0.0437, 0.8171, -0.3418],
+            ]),
+        ],
+        "Bhat": [
+            np.array([[1.1365, 11.2394], [-0.4412, -26.3674],
+                      [-0.8990, -12.1602], [-0.1638, -1.8864]]),
+            np.array([[-1.7958, 0.6218], [-4.1949, 2.6356],
+                      [1.9475, 7.0581], [0.2301, -0.2186]]),
+            np.array([[-1.9366, 0.6425], [-3.8207, 2.6113],
+                      [1.9539, 7.0486], [0.2576, -0.2214]]),
+        ],
+        "Lhat": [
+            np.array([[0.0016, 0.0517, 0.0309, -1.0012]]),
+            np.array([[-0.1044, 0.0370, -0.1884, 0.3614e-6]]),
+            np.array([[0.1044, 0.0370, -0.1884, 0.3613e-6]]),
+        ],
+        "Ehat": [
+            np.array([[0.0525, 0.0395]]),
+            np.array([[0.0000, 1.0000]]),
+            np.array([[0.0000, 1.0000]]),
+        ],
+    }

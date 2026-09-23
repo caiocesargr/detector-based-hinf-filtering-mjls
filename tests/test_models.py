@@ -10,8 +10,35 @@ from detector_hinf.models import (
     example2_detector_generators,
     example2_emission_matrix,
     example2_markov_generator,
+    example2_published_algorithm1_filter,
     example2_uav_system,
 )
+
+
+@pytest.mark.parametrize("key,shape", [
+    ("Ahat", (4, 4)), ("Bhat", (4, 2)),
+    ("Lhat", (1, 4)), ("Ehat", (1, 2)),
+])
+def test_example2_published_filter_dimensions(key, shape):
+    matrices = example2_published_algorithm1_filter()[key]
+    assert isinstance(matrices, list)
+    assert len(matrices) == 3
+    for matrix in matrices:
+        assert isinstance(matrix, np.ndarray)
+        assert matrix.shape == shape
+        assert np.isfinite(matrix).all()
+
+
+def test_example2_published_filter_output_coefficients():
+    reported = example2_published_algorithm1_filter()
+    np.testing.assert_array_equal(reported["Lhat"], [
+        [[0.0016, 0.0517, 0.0309, -1.0012]],
+        [[-0.1044, 0.0370, -0.1884, 0.3614e-6]],
+        [[0.1044, 0.0370, -0.1884, 0.3613e-6]],
+    ])
+    np.testing.assert_array_equal(reported["Ehat"], [
+        [[0.0525, 0.0395]], [[0., 1.]], [[0., 1.]],
+    ])
 
 
 def test_example1_matrix_dimensions():
