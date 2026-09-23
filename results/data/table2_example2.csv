@@ -1,0 +1,5 @@
+scenario,status,computed_gamma,gamma_sq,reported_gamma,absolute_difference,relative_difference,iterations
+Complete information [30],reported_only,,,0.0002511,,,
+Mode-independent [30],reported_only,,,1.5450,,,
+Theorem 1,optimal,0.11366112993323077,0.012918852457698768,0.1024,0.011261129933230765,0.10997197200420669,
+Algorithm 1,optimal,0.09300570715740299,0.0086500615638486,0.0909,0.0021057071574029917,0.023165095240957008,2

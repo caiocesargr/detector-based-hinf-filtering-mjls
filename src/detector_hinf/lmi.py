@@ -9,7 +9,12 @@ from .detector import (
     psi_map,
     weighted_detector_average,
 )
-from .models import example1_emission_matrix, example1_system
+from .models import (
+    example1_emission_matrix,
+    example1_system,
+    example2_emission_matrix,
+    example2_uav_system,
+)
 
 
 def _strict_lmi_arguments(X, eps):
@@ -337,6 +342,50 @@ def solve_theorem1_example1(rho, solver="MOSEK", verbose=False, return_filter=Fa
         "status": problem.status,
         "gamma": None if value is None else float(np.sqrt(value)),
         "gamma_sq": value,
+    }
+    if return_filter:
+        if value is None:
+            result.update({name: None for name in ("Ahat", "Bhat", "Lhat", "Ehat")})
+        else:
+            result.update(recover_filter_matrices(Upsilon, variables))
+    return result
+
+
+def solve_theorem1_example2(return_filter=False, solver="MOSEK", verbose=False):
+    """Solve Theorem 1 for the two-mode Example 2 UAV plant.
+
+    Both modes use the fixed (17, 4) design matrix consisting of four I4
+    blocks followed by [1, 0, 0, 0]. The plant tuple includes the Example 2
+    Markov generator; C3_reported remains unused metadata. There are three
+    detector symbols, but only two plant modes.
+
+    Return status, gamma_sq, and gamma=sqrt(gamma_sq). For optimal or
+    optimal_inaccurate status, finite objective values are clipped at zero
+    for numerical roundoff; otherwise both costs are None. When
+    return_filter=True, also return lists Ahat, Bhat, Lhat, Ehat, each with
+    three matrices of shapes (4, 4), (4, 2), (1, 4), (1, 2), respectively.
+    Filter entries are None without a usable solution. Solver, licensing,
+    and recovery errors propagate to the caller.
+    """
+    system, _ = example2_uav_system()
+    Upsilon = example2_emission_matrix()
+    Ecal0 = np.vstack([
+        np.eye(4), np.eye(4), np.eye(4), np.eye(4),
+        np.array([[1.0, 0.0, 0.0, 0.0]]),
+    ])
+    assert Ecal0.shape == (17, 4)
+    problem, gamma_sq, variables = build_theorem1_problem(
+        system, Upsilon, [Ecal0.copy(), Ecal0.copy()]
+    )
+    problem.solve(solver=solver, verbose=verbose)
+    value = None
+    if (problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE)
+            and gamma_sq.value is not None and np.isfinite(gamma_sq.value)):
+        value = max(0.0, float(gamma_sq.value))
+    result = {
+        "status": problem.status,
+        "gamma_sq": value,
+        "gamma": None if value is None else float(np.sqrt(value)),
     }
     if return_filter:
         if value is None:

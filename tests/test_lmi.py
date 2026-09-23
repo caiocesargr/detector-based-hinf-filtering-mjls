@@ -11,8 +11,15 @@ from detector_hinf.lmi import (
     positive_definite_constraint,
     recover_filter_matrices,
     solve_theorem1_example1,
+    solve_theorem1_example2,
 )
-from detector_hinf.models import example1_emission_matrix, example1_system
+from detector_hinf.models import (
+    example1_emission_matrix,
+    example1_system,
+    example2_emission_matrix,
+    example2_markov_generator,
+    example2_uav_system,
+)
 
 
 @pytest.mark.parametrize(
@@ -169,5 +176,99 @@ def test_unsuccessful_solve_does_not_recover_filter(monkeypatch):
 
     monkeypatch.setattr(cp.Problem, "solve", fake_solve)
     result = solve_theorem1_example1(0.2, return_filter=True)
+    assert result["status"] == cp.INFEASIBLE
+    assert all(result[key] is None for key in ("gamma", "gamma_sq", "Ahat", "Bhat", "Lhat", "Ehat"))
+
+
+def test_example2_theorem1_variable_dimensions():
+    system, _ = example2_uav_system()
+    Ecal0 = np.vstack([np.eye(4)] * 4 + [np.array([[1., 0., 0., 0.]])])
+    assert Ecal0.shape == (17, 4)
+    problem, gamma_sq, variables = build_theorem1_problem(
+        system, example2_emission_matrix(), [Ecal0, Ecal0],
+    )
+    assert problem.is_dcp()
+    assert gamma_sq.shape == () and gamma_sq.attributes["nonneg"]
+    assert problem.objective.args[0] is gamma_sq
+    for name, count, shape in (
+        ("P", 2, (8, 8)), ("Q", 2, (17, 4)),
+        ("X", 3, (4, 4)), ("Y", 3, (4, 2)),
+        ("S", 3, (1, 4)), ("T", 3, (1, 2)), ("Z", 2, (4, 4)),
+    ):
+        assert len(variables[name]) == count
+        assert all(variable.shape == shape for variable in variables[name])
+    for name, shape in (("U", (8, 8)), ("V", (1, 8)), ("W", (1, 1))):
+        assert set(variables[name]) == {(0, 0), (1, 1), (1, 2)}
+        assert all(variable.shape == shape for variable in variables[name].values())
+    for name in ("P", "U", "W"):
+        group = variables[name]
+        entries = group.values() if isinstance(group, dict) else group
+        assert all(variable.attributes["symmetric"] for variable in entries)
+    np.testing.assert_array_equal(variables["phi"], [0, 1, 1])
+    np.testing.assert_array_equal(variables["psi"], [0, 1])
+    assert sorted(c.shape for c in problem.constraints) == sorted(
+        [(8, 8)] * 2 + [(17, 17)] * 2 + [(10, 10)] * 3
+    )
+
+
+@pytest.mark.parametrize("return_filter", [False, True])
+def test_example2_wrapper_and_filter_dimensions(monkeypatch, return_filter):
+    from detector_hinf import lmi
+
+    original_builder = lmi.build_theorem1_problem
+    captured = {}
+
+    def capture_builder(system, emission, Ecal):
+        assert len(system[2]) == 2  # No C3_reported plant mode.
+        np.testing.assert_array_equal(system[-1], example2_markov_generator())
+        np.testing.assert_array_equal(emission, example2_emission_matrix())
+        assert len(Ecal) == 2
+        for E in Ecal:
+            assert E.shape == (17, 4)
+            np.testing.assert_array_equal(E[:16], np.tile(np.eye(4), (4, 1)))
+            np.testing.assert_array_equal(E[16], [1., 0., 0., 0.])
+        problem, gamma_sq, variables = original_builder(system, emission, Ecal)
+        captured.update(variables)
+        return problem, gamma_sq, variables
+
+    def fake_solve(problem, solver, verbose):
+        assert solver == "SCS" and verbose is True
+        for variable in problem.variables():
+            if variable.name() == "gamma_sq":
+                variable.value = 0.04
+        for nu, Z in enumerate(captured["Z"]):
+            Z.value = (nu + 1) * np.eye(4)
+        for name in ("X", "Y", "S", "T"):
+            for ell, variable in enumerate(captured[name]):
+                variable.value = np.full(variable.shape, ell + 1.0)
+        problem._status = cp.OPTIMAL
+
+    monkeypatch.setattr(lmi, "build_theorem1_problem", capture_builder)
+    monkeypatch.setattr(cp.Problem, "solve", fake_solve)
+    result = solve_theorem1_example2(return_filter=return_filter, solver="SCS", verbose=True)
+    assert result["status"] == cp.OPTIMAL
+    assert result["gamma_sq"] == 0.04 and result["gamma"] == 0.2
+    if not return_filter:
+        assert set(result) == {"status", "gamma_sq", "gamma"}
+        return
+    for name, shape in (("Ahat", (4, 4)), ("Bhat", (4, 2)),
+                        ("Lhat", (1, 4)), ("Ehat", (1, 2))):
+        assert len(result[name]) == 3
+        assert all(matrix.shape == shape for matrix in result[name])
+    for ell, nu in enumerate([0, 1, 1]):
+        np.testing.assert_allclose(captured["Z"][nu].value @ result["Ahat"][ell],
+                                   captured["X"][ell].value)
+        np.testing.assert_allclose(captured["Z"][nu].value @ result["Bhat"][ell],
+                                   captured["Y"][ell].value)
+        np.testing.assert_array_equal(result["Lhat"][ell], captured["S"][ell].value)
+        np.testing.assert_array_equal(result["Ehat"][ell], captured["T"][ell].value)
+
+
+def test_example2_unsuccessful_solve(monkeypatch):
+    def fake_solve(problem, **kwargs):
+        problem._status = cp.INFEASIBLE
+
+    monkeypatch.setattr(cp.Problem, "solve", fake_solve)
+    result = solve_theorem1_example2(return_filter=True)
     assert result["status"] == cp.INFEASIBLE
     assert all(result[key] is None for key in ("gamma", "gamma_sq", "Ahat", "Bhat", "Lhat", "Ehat"))
