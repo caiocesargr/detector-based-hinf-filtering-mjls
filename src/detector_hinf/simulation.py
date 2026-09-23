@@ -4,7 +4,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from .detector import weighted_detector_average
-from .models import example1_system
+from .models import example1_system, example2_uav_system
 
 
 def simulate_ctmc(Q, t_final, initial_state, rng):
@@ -196,4 +196,113 @@ def simulate_example1_dynamics(time_grid, jump_times, augmented_states,
         "t": time_grid.copy(), "w": w, "theta": theta, "detector_symbol": detector,
         "x": x, "xhat_a": xhat_a, "xhat_b": xhat_b,
         "y": y, "z": z, "zhat_a": zhat_a, "zhat_b": zhat_b,
+    }
+
+
+def simulate_example2_dynamics(time_grid, jump_times, augmented_states,
+                               Upsilon, filter_matrices, *, rtol=1e-7, atol=1e-9):
+    """Integrate Example 2 system (8) along a supplied augmented CTMC path.
+
+    States encode 3*theta + detector_symbol, with zero-based indices. The
+    path starts at zero; its final state persists to the sampling horizon.
+    Integration starts at zero even when the first requested sample is later.
+    Plant and averaged filter start at ones(4) and zeros(4), respectively.
+
+    Supply the (2, 3) emission matrix and numerical Ahat/Bhat/Lhat/Ehat lists
+    in a dictionary (computed or published), or a tuple of those four lists.
+    Only Ahat and Bhat are averaged; Lhat and Ehat use the current detector.
+    The disturbance is 0.5*sin(0.2*t) through t=45 inclusive, then zero,
+    regardless of the requested sampling horizon.
+
+    Adaptive solve_ivp integration restarts at actual jumps and at t=45.
+    States remain continuous; sampled modes and outputs use the new mode at
+    a jump. Return t, w, theta, detector_symbol as 1-D arrays, x and xhat as
+    (n, 4), y as (n, 2), and z, zhat, error_sq as (n, 1) arrays.
+    """
+    def real_array(value, name, ndim):
+        array = np.asarray(value)
+        if (array.ndim != ndim or 0 in array.shape or array.dtype.kind not in "biuf"
+                or not np.all(np.isfinite(array))):
+            raise ValueError(f"{name} must be a nonempty finite real {ndim}-D array.")
+        return array.astype(float, copy=False)
+
+    time_grid = real_array(time_grid, "time_grid", 1)
+    if time_grid[0] < 0 or np.any(np.diff(time_grid) <= 0):
+        raise ValueError("time_grid must be nonnegative and strictly increasing.")
+    jump_times = real_array(jump_times, "jump_times", 1)
+    if jump_times[0] != 0 or np.any(np.diff(jump_times) <= 0):
+        raise ValueError("jump_times must start at zero and be strictly increasing.")
+    augmented_states = np.asarray(augmented_states)
+    if (augmented_states.shape != jump_times.shape
+            or augmented_states.dtype.kind not in "iu"
+            or np.any(augmented_states < 0) or np.any(augmented_states >= 6)):
+        raise ValueError("augmented_states must match jump_times and contain indices 0 through 5.")
+    Upsilon = real_array(Upsilon, "Upsilon", 2)
+    if (Upsilon.shape != (2, 3) or np.any(Upsilon < 0)
+            or not np.allclose(Upsilon.sum(axis=1), 1.0, rtol=0, atol=1e-12)):
+        raise ValueError("Upsilon must be a row-stochastic (2, 3) matrix.")
+    names = ("Ahat", "Bhat", "Lhat", "Ehat")
+    if isinstance(filter_matrices, dict):
+        filter_matrices = tuple(filter_matrices[name] for name in names)
+    if len(filter_matrices) != 4:
+        raise ValueError("Supply Ahat, Bhat, Lhat, and Ehat.")
+    filters = []
+    for name, group, shape in zip(names, filter_matrices, ((4, 4), (4, 2), (1, 4), (1, 2))):
+        if group is None or len(group) != 3:
+            raise ValueError(f"{name} must contain three numerical matrices.")
+        arrays = [real_array(value, f"{name}[{ell}]", 2) for ell, value in enumerate(group)]
+        if any(value.shape != shape for value in arrays):
+            raise ValueError(f"Each {name} matrix must have shape {shape}.")
+        filters.append(arrays)
+    Ahat, Bhat, Lhat, Ehat = filters
+    system, _ = example2_uav_system()
+    A, B, C, D, L, F, _ = system
+    HA = [weighted_detector_average(Upsilon, i, Ahat) for i in range(2)]
+    HB = [weighted_detector_average(Upsilon, i, Bhat) for i in range(2)]
+    path_theta, path_detector = decode_augmented_states(augmented_states, 3)
+    combined = np.concatenate([np.ones(4), np.zeros(4)])
+    trajectory = np.empty((len(time_grid), 8))
+    t_final = time_grid[-1]
+    boundaries = np.unique(np.concatenate([
+        [0., t_final], jump_times[jump_times < t_final],
+        [45.] if 0 < 45. < t_final else [],
+    ]))
+    for start, stop in zip(boundaries[:-1], boundaries[1:]):
+        path_index = np.searchsorted(jump_times, start, side="right") - 1
+        i = path_theta[path_index]
+        # Use the appropriate one-sided forcing on each integration interval.
+        # Its isolated value at 45 affects sampled feedthrough, not state evolution.
+        forcing_active = start < 45.
+
+        def rhs(t, state):
+            x, xhat = state[:4], state[4:]
+            w = np.array([0.5 * np.sin(0.2 * t) if forcing_active else 0.])
+            y = C[i] @ x + D[i] @ w
+            return np.concatenate([A[i] @ x + B[i] @ w,
+                                   HA[i] @ xhat + HB[i] @ y])
+
+        solution = solve_ivp(rhs, (start, stop), combined, dense_output=True,
+                             rtol=rtol, atol=atol)
+        if not solution.success:
+            raise RuntimeError(f"Integration failed on [{start}, {stop}]: {solution.message}")
+        first, last = np.searchsorted(time_grid, [start, stop], side="left")
+        if first < last:
+            trajectory[first:last] = solution.sol(time_grid[first:last]).T
+        combined = solution.y[:, -1]
+    trajectory[-1] = combined
+    sampled_path = np.searchsorted(jump_times, time_grid, side="right") - 1
+    theta, detector = path_theta[sampled_path], path_detector[sampled_path]
+    x, xhat = trajectory[:, :4], trajectory[:, 4:]
+    w = np.where(time_grid <= 45., 0.5 * np.sin(0.2 * time_grid), 0.)
+    y = np.empty((len(time_grid), 2))
+    z, zhat = [np.empty((len(time_grid), 1)) for _ in range(2)]
+    for sample, (i, ell) in enumerate(zip(theta, detector)):
+        disturbance = w[sample:sample + 1]
+        y[sample] = C[i] @ x[sample] + D[i] @ disturbance
+        z[sample] = L[i] @ x[sample] + F[i] @ disturbance
+        zhat[sample] = Lhat[ell] @ xhat[sample] + Ehat[ell] @ y[sample]
+    return {
+        "t": time_grid.copy(), "w": w, "theta": theta, "detector_symbol": detector,
+        "x": x, "xhat": xhat, "y": y, "z": z, "zhat": zhat,
+        "error_sq": (z - zhat)**2,
     }
