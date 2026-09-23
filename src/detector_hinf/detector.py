@@ -61,6 +61,26 @@ def psi_map(Upsilon, tol=1e-12):
     return psi
 
 
+def phi_map(Upsilon, tol=1e-12):
+    """Return an integer array mapping detector symbols to partition indices.
+
+    All indices are zero-based, with the same distinguishable-set ordering
+    as psi_map and distinguishable_sets. For every ell in D_i,
+    phi[ell] = psi[i]: shared symbols connect their emitting modes, so this
+    assignment is unique. Raise ValueError if a symbol has no emission
+    probability above tol, since it has no associated distinguishable set.
+    """
+    symbols = detector_symbol_sets(Upsilon, tol)
+    psi = psi_map(Upsilon, tol)
+    phi = np.full(np.asarray(Upsilon).shape[1], -1, dtype=int)
+    for mode, emitted in enumerate(symbols):
+        for ell in emitted:
+            phi[ell] = psi[mode]
+    if np.any(phi < 0):
+        raise ValueError("Every detector symbol must have an emission probability above tol.")
+    return phi
+
+
 def weighted_detector_average(Upsilon, mode, matrices):
     """Return sum_ell Upsilon[mode, ell] * matrices[ell] as a NumPy array.
 

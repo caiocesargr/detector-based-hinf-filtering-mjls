@@ -6,6 +6,7 @@ import pytest
 from detector_hinf.detector import (
     detector_symbol_sets,
     distinguishable_sets,
+    phi_map,
     psi_map,
     weighted_detector_average,
 )
@@ -28,6 +29,18 @@ def test_example1_detector(rho, symbols, partition, psi):
     np.testing.assert_array_equal(psi_map(Upsilon), psi)
 
 
+@pytest.mark.parametrize(
+    "rho, expected",
+    [(0.0, [0, 1]), (0.2, [0, 0]), (0.5, [0, 0]), (1.0, [1, 0])],
+)
+def test_example1_phi_map(rho, expected):
+    Upsilon = example1_emission_matrix(rho)
+    phi = phi_map(Upsilon)
+    assert phi.shape == (2,)
+    assert np.issubdtype(phi.dtype, np.integer)
+    np.testing.assert_array_equal(phi, expected)
+
+
 def test_transitive_overlaps_and_component_order():
     # Modes 0 and 2 have disjoint supports but are linked through mode 3.
     Upsilon = [
@@ -39,6 +52,12 @@ def test_transitive_overlaps_and_component_order():
     assert detector_symbol_sets(Upsilon) == [{0}, {2}, {1}, {0, 1}]
     assert distinguishable_sets(Upsilon) == [{0, 2, 3}, {1}]
     np.testing.assert_array_equal(psi_map(Upsilon), [0, 1, 0, 0])
+    np.testing.assert_array_equal(phi_map(Upsilon), [0, 0, 1])
+    phi = phi_map(Upsilon)
+    psi = psi_map(Upsilon)
+    for mode, symbols in enumerate(detector_symbol_sets(Upsilon)):
+        for ell in symbols:
+            assert phi[ell] == psi[mode]
 
 
 def test_tolerance_is_strict_and_propagated():
@@ -46,8 +65,16 @@ def test_tolerance_is_strict_and_propagated():
     assert detector_symbol_sets(Upsilon, tol=0.25) == [{0}, {1}]
     assert distinguishable_sets(Upsilon, tol=0.25) == [{0}, {1}]
     np.testing.assert_array_equal(psi_map(Upsilon, tol=0.25), [0, 1])
+    np.testing.assert_array_equal(phi_map(Upsilon, tol=0.25), [0, 1])
     assert distinguishable_sets(Upsilon, tol=0.0) == [{0, 1}]
     np.testing.assert_array_equal(psi_map(Upsilon, tol=0.0), [0, 0])
+    np.testing.assert_array_equal(phi_map(Upsilon, tol=0.0), [0, 0])
+
+
+@pytest.mark.parametrize("probability", [0.0, 1e-12])
+def test_phi_map_rejects_symbols_without_thresholded_support(probability):
+    with pytest.raises(ValueError, match="Every detector symbol"):
+        phi_map([[1.0 - probability, probability]])
 
 
 def test_empty_thresholded_supports_are_singletons():
