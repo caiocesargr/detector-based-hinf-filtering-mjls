@@ -261,7 +261,54 @@ def build_theorem1_problem(system, Upsilon, Ecal, eps=1e-8):
     return cp.Problem(cp.Minimize(gamma_sq), constraints), gamma_sq, variables
 
 
-def solve_theorem1_example1(rho, solver="MOSEK", verbose=False):
+def recover_filter_matrices(Upsilon, variable_values):
+    """Recover equation (23) as symbol-indexed lists of NumPy matrices.
+
+    ``variable_values`` contains X, Y, S, T (indexed by detector symbol)
+    and Z (indexed by distinguishable set). Entries may be numerical arrays
+    or CVXPY expressions with assigned values, including the dictionary
+    returned by build_theorem1_problem after solving. All indices are
+    zero-based and all strictly positive emissions determine phi.
+
+    Return a dictionary with Ahat, Bhat, Lhat, Ehat. Raise ValueError for
+    missing numerical values or incompatible dimensions, and
+    numpy.linalg.LinAlgError if a required Z matrix is singular.
+    """
+    phi = phi_map(Upsilon, tol=0.0)
+    n_symbols = len(phi)
+    n_sets = int(phi.max()) + 1
+    values = {}
+    for name in ("X", "Y", "S", "T", "Z"):
+        if name not in variable_values:
+            raise ValueError(f"Missing recovery matrices: {name}.")
+        entries = variable_values[name]
+        count = n_sets if name == "Z" else n_symbols
+        if len(entries) != count:
+            raise ValueError(f"{name} must contain {count} matrices.")
+        values[name] = [
+            _numeric_matrix(entry.value if isinstance(entry, cp.Expression) else entry,
+                            f"{name}[{index}]")
+            for index, entry in enumerate(entries)
+        ]
+    nx = values["Z"][0].shape[0]
+    ny = values["Y"][0].shape[1]
+    nz = values["S"][0].shape[0]
+    for name, shape in (("Z", (nx, nx)), ("X", (nx, nx)),
+                        ("Y", (nx, ny)), ("S", (nz, nx)), ("T", (nz, ny))):
+        for index, entry in enumerate(values[name]):
+            _numeric_matrix(entry, f"{name}[{index}]", shape)
+
+    recovered = {name: [] for name in ("Ahat", "Bhat", "Lhat", "Ehat")}
+    for ell, nu in enumerate(phi):
+        Z = values["Z"][nu]
+        recovered["Ahat"].append(np.linalg.solve(Z, values["X"][ell]))
+        recovered["Bhat"].append(np.linalg.solve(Z, values["Y"][ell]))
+        recovered["Lhat"].append(values["S"][ell].copy())
+        recovered["Ehat"].append(values["T"][ell].copy())
+    return recovered
+
+
+def solve_theorem1_example1(rho, solver="MOSEK", verbose=False, return_filter=False):
     """Solve Theorem 1 for one Example 1 emission parameter rho.
 
     Both modes use Ecal_i = vstack(I3, I3, I3, I3, zeros((1, 3))).
@@ -270,10 +317,15 @@ def solve_theorem1_example1(rho, solver="MOSEK", verbose=False):
     values are returned as floats (clipped at zero for numerical roundoff).
     Otherwise gamma and gamma_sq are None. Solver or licensing errors
     propagate to the caller; the solver is never silently changed.
+
+    With return_filter=True, also include symbol-indexed lists Ahat, Bhat,
+    Lhat, Ehat recovered by equation (23). These entries are None if no
+    usable objective value is available. Recovery errors propagate rather
+    than returning invalid filter matrices.
     """
     Upsilon = example1_emission_matrix(rho)
     E = np.vstack([np.eye(3), np.eye(3), np.eye(3), np.eye(3), np.zeros((1, 3))])
-    problem, gamma_sq, _ = build_theorem1_problem(
+    problem, gamma_sq, variables = build_theorem1_problem(
         example1_system(), Upsilon, [E.copy(), E.copy()]
     )
     problem.solve(solver=solver, verbose=verbose)
@@ -281,8 +333,14 @@ def solve_theorem1_example1(rho, solver="MOSEK", verbose=False):
     if (problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE)
             and gamma_sq.value is not None and np.isfinite(gamma_sq.value)):
         value = max(0.0, float(gamma_sq.value))
-    return {
+    result = {
         "status": problem.status,
         "gamma": None if value is None else float(np.sqrt(value)),
         "gamma_sq": value,
     }
+    if return_filter:
+        if value is None:
+            result.update({name: None for name in ("Ahat", "Bhat", "Lhat", "Ehat")})
+        else:
+            result.update(recover_filter_matrices(Upsilon, variables))
+    return result

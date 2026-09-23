@@ -5,10 +5,14 @@ import numpy as np
 import pytest
 
 from detector_hinf.lmi import (
+    build_theorem1_problem,
     her,
     negative_definite_constraint,
     positive_definite_constraint,
+    recover_filter_matrices,
+    solve_theorem1_example1,
 )
+from detector_hinf.models import example1_emission_matrix, example1_system
 
 
 @pytest.mark.parametrize(
@@ -71,3 +75,99 @@ def test_invalid_margin(helper, eps):
 def test_invalid_matrix_shape(helper, shape):
     with pytest.raises(ValueError, match="square"):
         helper(cp.Variable(shape))
+
+
+def _example1_recovery_values(n_sets):
+    """Synthetic data to check recovery algebra, not filters from the paper."""
+    return {
+        "X": [np.arange(9, dtype=float).reshape(3, 3) + ell for ell in range(2)],
+        "Y": [np.array([[1.0], [2.0], [3.0]]) + ell for ell in range(2)],
+        "S": [np.array([[0.2, 0.3, 0.4]]) + ell for ell in range(2)],
+        "T": [np.array([[0.1 + ell]]) for ell in range(2)],
+        "Z": [(nu + 1) * np.array([[2., 1., 0.], [0., 3., 1.], [0., 0., 4.]])
+              for nu in range(n_sets)],
+    }
+
+
+@pytest.mark.parametrize(
+    "rho, expected_phi", [(0.0, [0, 1]), (0.2, [0, 0]), (0.5, [0, 0]), (1.0, [1, 0])]
+)
+def test_example1_filter_recovery_dimensions_and_equations(rho, expected_phi):
+    values = _example1_recovery_values(len(set(expected_phi)))
+    recovered = recover_filter_matrices(example1_emission_matrix(rho), values)
+    for name, shape in (("Ahat", (3, 3)), ("Bhat", (3, 1)),
+                        ("Lhat", (1, 3)), ("Ehat", (1, 1))):
+        assert isinstance(recovered[name], list)
+        assert len(recovered[name]) == 2
+        assert all(matrix.shape == shape for matrix in recovered[name])
+    for ell, nu in enumerate(expected_phi):
+        np.testing.assert_allclose(values["Z"][nu] @ recovered["Ahat"][ell],
+                                   values["X"][ell], atol=1e-12)
+        np.testing.assert_allclose(values["Z"][nu] @ recovered["Bhat"][ell],
+                                   values["Y"][ell], atol=1e-12)
+        np.testing.assert_array_equal(recovered["Lhat"][ell], values["S"][ell])
+        np.testing.assert_array_equal(recovered["Ehat"][ell], values["T"][ell])
+        assert not np.shares_memory(recovered["Lhat"][ell], values["S"][ell])
+        assert not np.shares_memory(recovered["Ehat"][ell], values["T"][ell])
+
+
+@pytest.mark.parametrize("return_filter", [False, True])
+def test_example1_solver_optional_filter(monkeypatch, return_filter):
+    # Populate the actual builder's variables without requiring a solver license.
+    values = _example1_recovery_values(1)
+
+    def fake_solve(problem, solver, verbose):
+        assert solver == "MOSEK" and verbose is False
+        for variable in problem.variables():
+            if variable.name() == "gamma_sq":
+                variable.value = 0.25
+            else:
+                name, *indices = variable.name().split("_")
+                if name in values:
+                    variable.value = values[name][int(indices[0])]
+        problem._status = cp.OPTIMAL
+
+    monkeypatch.setattr(cp.Problem, "solve", fake_solve)
+    result = solve_theorem1_example1(0.2, return_filter=return_filter)
+    assert result["status"] == cp.OPTIMAL
+    assert result["gamma"] == 0.5 and result["gamma_sq"] == 0.25
+    expected_keys = {"status", "gamma", "gamma_sq"}
+    if return_filter:
+        expected_keys.update(("Ahat", "Bhat", "Lhat", "Ehat"))
+        for name, shape in (("Ahat", (3, 3)), ("Bhat", (3, 1)),
+                            ("Lhat", (1, 3)), ("Ehat", (1, 1))):
+            assert len(result[name]) == 2
+            assert all(matrix.shape == shape for matrix in result[name])
+    assert set(result) == expected_keys
+
+
+def test_filter_recovery_rejects_unsolved_values():
+    E = np.vstack([np.eye(3)] * 4 + [np.zeros((1, 3))])
+    Upsilon = example1_emission_matrix(0.2)
+    _, _, variables = build_theorem1_problem(example1_system(), Upsilon, [E, E])
+    with pytest.raises(ValueError, match="numerical matrix"):
+        recover_filter_matrices(Upsilon, variables)
+
+
+def test_filter_recovery_rejects_singular_Z():
+    values = _example1_recovery_values(1)
+    values["Z"][0] = np.zeros((3, 3))
+    with pytest.raises(np.linalg.LinAlgError):
+        recover_filter_matrices(example1_emission_matrix(0.2), values)
+
+
+def test_filter_recovery_rejects_wrong_dimensions():
+    values = _example1_recovery_values(1)
+    values["Y"][1] = np.ones((2, 1))
+    with pytest.raises(ValueError, match=r"Y\[1\].*shape"):
+        recover_filter_matrices(example1_emission_matrix(0.2), values)
+
+
+def test_unsuccessful_solve_does_not_recover_filter(monkeypatch):
+    def fake_solve(problem, **kwargs):
+        problem._status = cp.INFEASIBLE
+
+    monkeypatch.setattr(cp.Problem, "solve", fake_solve)
+    result = solve_theorem1_example1(0.2, return_filter=True)
+    assert result["status"] == cp.INFEASIBLE
+    assert all(result[key] is None for key in ("gamma", "gamma_sq", "Ahat", "Bhat", "Lhat", "Ehat"))
