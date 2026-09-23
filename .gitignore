@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Testing
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local/private files
+local/
+
+# Temporary files
+*.tmp
+*.log
