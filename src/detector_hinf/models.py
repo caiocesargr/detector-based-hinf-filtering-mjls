@@ -67,3 +67,39 @@ def example1_detector_generators():
         np.array([[-0.009, 0.009], [0.036, -0.036]]),
         np.array([[-0.036, 0.036], [0.009, -0.009]]),
     ]
+
+
+def example2_markov_generator():
+    """Return the Example 2 plant-mode generator, ordered as modes 0 and 1."""
+    return np.array([[-2.5, 2.5], [9.0, -9.0]])
+
+
+def example2_detector_generators():
+    """Return the unscaled detector generators in equations (29a)--(29b).
+
+    List indices 0 and 1 correspond to the paper's modes 1 and 2. Each
+    (3, 3) array uses detector-symbol order 0, 1, 2. The factor 1e-5 is
+    included; equation (3)'s division by epsilon is applied separately.
+
+    Their exact stationary distributions are [1, 1e-5, 1e-5]/(1+2e-5)
+    and [2e-5, 0.5, 0.5]/(1+2e-5). These approximate, but do not exactly
+    equal, the emission rows reported in equation (30).
+    """
+    return [
+        1e-5 * np.array([[-2.0, 1.0, 1.0],
+                         [1e5, -1e5, 0.0],
+                         [1e5, 0.0, -1e5]]),
+        1e-5 * np.array([[-1e5, 5e4, 5e4],
+                         [2.0, -2.0, 0.0],
+                         [2.0, 0.0, -2.0]]),
+    ]
+
+
+def example2_emission_matrix():
+    """Return the reported (2, 3) emission matrix in equation (30).
+
+    Rows index Markov modes and columns index detector symbols, starting
+    at zero. The rows approximate the stationary distributions of the
+    finite-rate generators returned by example2_detector_generators.
+    """
+    return np.array([[1.0, 0.0, 0.0], [0.0, 0.5, 0.5]])
