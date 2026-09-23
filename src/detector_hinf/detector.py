@@ -107,3 +107,66 @@ def weighted_detector_average(Upsilon, mode, matrices):
     for ell in sorted(symbols[mode]):
         average += Upsilon[mode, ell] * arrays[ell]
     return average
+
+
+def build_augmented_generator(Lambda, detector_generators, Upsilon, epsilon):
+    """Build the continuous-time generator of (theta, theta_hat) in (3).
+
+    For N Markov modes and M detector symbols, return an (N*M, N*M) array.
+    State (i, k) has zero-based index i*M + k; rows are source states and
+    columns are destination states. Markov jumps use the destination mode's
+    emission probabilities, Lambda[i, j] * Upsilon[j, ell]. Within mode i,
+    detector off-diagonal rates are detector_generators[i][k, ell]/epsilon.
+    Diagonals are minus the sum of each row's off-diagonal rates.
+
+    Inputs must be finite real matrices: Lambda is an (N, N) generator,
+    detector_generators contains N unscaled (M, M) generators, and Upsilon
+    is row-stochastic. Epsilon must be a finite positive scalar. This helper
+    constructs rates only; it does not simulate paths or impose an invariant
+    distribution condition between Upsilon and the detector generators.
+    """
+    def real_matrix(value, name):
+        array = np.asarray(value)
+        if (array.ndim != 2 or 0 in array.shape or array.dtype.kind not in "biuf"
+                or not np.all(np.isfinite(array))):
+            raise ValueError(f"{name} must be a nonempty finite real matrix.")
+        return array.astype(float, copy=False)
+
+    def generator(value, size, name):
+        array = real_matrix(value, name)
+        if array.shape != (size, size):
+            raise ValueError(f"{name} must have shape {(size, size)}.")
+        off_diagonal = array[~np.eye(size, dtype=bool)]
+        if (np.any(off_diagonal < 0) or np.any(np.diag(array) > 0)
+                or not np.allclose(array.sum(axis=1), 0, rtol=0, atol=1e-12)):
+            raise ValueError(f"{name} must be a Markov generator.")
+        return array
+
+    epsilon = np.asarray(epsilon)
+    if (epsilon.ndim != 0 or epsilon.dtype.kind not in "biuf"
+            or not np.isfinite(epsilon) or epsilon <= 0):
+        raise ValueError("epsilon must be a finite positive scalar.")
+    epsilon = float(epsilon)
+    Upsilon = real_matrix(Upsilon, "Upsilon")
+    if (np.any(Upsilon < 0)
+            or not np.allclose(Upsilon.sum(axis=1), 1, rtol=0, atol=1e-12)):
+        raise ValueError("Upsilon must be row-stochastic.")
+    n_modes, n_symbols = Upsilon.shape
+    Lambda = generator(Lambda, n_modes, "Lambda")
+    if len(detector_generators) != n_modes:
+        raise ValueError("Supply one detector generator per Markov mode.")
+    detectors = [generator(value, n_symbols, f"detector_generators[{i}]")
+                 for i, value in enumerate(detector_generators)]
+
+    augmented = np.zeros((n_modes * n_symbols, n_modes * n_symbols))
+    for i in range(n_modes):
+        source = slice(i * n_symbols, (i + 1) * n_symbols)
+        for j in range(n_modes):
+            destination = slice(j * n_symbols, (j + 1) * n_symbols)
+            if i == j:
+                augmented[source, destination] = detectors[i] / epsilon
+            else:
+                augmented[source, destination] = Lambda[i, j] * Upsilon[j]
+    np.fill_diagonal(augmented, 0.0)
+    np.fill_diagonal(augmented, -augmented.sum(axis=1))
+    return augmented

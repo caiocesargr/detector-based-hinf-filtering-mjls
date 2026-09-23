@@ -3,7 +3,11 @@
 import numpy as np
 import pytest
 
-from detector_hinf.models import example1_emission_matrix, example1_system
+from detector_hinf.models import (
+    example1_detector_generators,
+    example1_emission_matrix,
+    example1_system,
+)
 
 
 def test_example1_matrix_dimensions():
@@ -47,3 +51,18 @@ def test_example1_emission_matrix_is_row_stochastic(rho):
     assert np.all(emission >= 0.0)
     assert np.all(emission <= 1.0)
     np.testing.assert_allclose(emission.sum(axis=1), 1.0, rtol=0, atol=1e-12)
+
+
+def test_example1_unscaled_detector_generators():
+    generators = example1_detector_generators()
+    assert isinstance(generators, list) and len(generators) == 2
+    np.testing.assert_array_equal(generators[0], [[-0.009, 0.009], [0.036, -0.036]])
+    np.testing.assert_array_equal(generators[1], [[-0.036, 0.036], [0.009, -0.009]])
+    for i, generator in enumerate(generators):
+        assert generator.shape == (2, 2)
+        assert np.all(generator[~np.eye(2, dtype=bool)] >= 0)
+        np.testing.assert_allclose(generator.sum(axis=1), 0, atol=1e-12)
+        np.testing.assert_allclose(example1_emission_matrix(0.2)[i] @ generator,
+                                   0, atol=1e-12)
+    generators[0][0, 0] = 0
+    assert example1_detector_generators()[0][0, 0] == -0.009

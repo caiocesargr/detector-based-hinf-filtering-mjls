@@ -54,3 +54,16 @@ def example1_emission_matrix(rho):
         raise ValueError("rho must be a real scalar in [0, 1].")
     rho = float(value)
     return np.array([[1.0 - rho, rho], [rho, 1.0 - rho]])
+
+
+def example1_detector_generators():
+    """Return the two unscaled detector generators used in Example 1.
+
+    List indices 0 and 1 correspond to the Markov modes. Rows and columns
+    index detector symbols. Equation (3) divides these rates by epsilon;
+    no scaling is applied here. Each call returns fresh arrays.
+    """
+    return [
+        np.array([[-0.009, 0.009], [0.036, -0.036]]),
+        np.array([[-0.036, 0.036], [0.009, -0.009]]),
+    ]
