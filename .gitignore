@@ -25,3 +25,4 @@ local/
 # Temporary files
 *.tmp
 *.log
+results/data/*.npz
