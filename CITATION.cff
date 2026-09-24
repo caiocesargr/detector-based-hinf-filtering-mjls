@@ -3,6 +3,9 @@ message: >-
   If you use this software, please cite the paper listed in preferred-citation.
 type: software
 title: "Detector-based H-infinity filtering for Markov jump linear systems"
+repository-code: "https://github.com/caiocesargr/detector-based-hinf-filtering-mjls"
+version: "1.0.0"
+date-released: "2026-09-24"
 authors:
   - family-names: Rodrigues
     given-names: "Caio César Graciani"
