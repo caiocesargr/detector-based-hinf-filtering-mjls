@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite the paper listed in preferred-citation.
+type: software
+title: "Detector-based H-infinity filtering for Markov jump linear systems"
+authors:
+  - family-names: Rodrigues
+    given-names: "Caio César Graciani"
+  - family-names: Todorov
+    given-names: "Marcos Garcia"
+  - family-names: Fragoso
+    given-names: "Marcelo Dutra"
+abstract: >-
+  Python implementation and numerical reproduction of the paper
+  "Detector-based approach for H-infinity filtering of Markov jump linear
+  systems with partial mode information", using CVXPY and MOSEK.
+preferred-citation:
+  type: article
+  title: >-
+    Detector-based approach for H-infinity filtering of Markov jump linear
+    systems with partial mode information
+  authors:
+    - family-names: Rodrigues
+      given-names: "Caio César Graciani"
+    - family-names: Todorov
+      given-names: "Marcos Garcia"
+    - family-names: Fragoso
+      given-names: "Marcelo Dutra"
+  journal: "IET Control Theory & Applications"
+  doi: "10.1049/iet-cta.2018.5640"
