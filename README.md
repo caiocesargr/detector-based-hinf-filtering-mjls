@@ -1,5 +1,7 @@
 # Detector-based H-infinity filtering for Markov jump linear systems
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22938714.svg)](https://doi.org/10.5281/zenodo.22938714)
+
 This repository provides a Python implementation and numerical reproduction of
 **“Detector-based approach for H-infinity filtering of Markov jump linear systems
 with partial mode information”** by **Caio César Graciani Rodrigues, Marcos Garcia
@@ -21,10 +23,10 @@ src/detector_hinf/   Models, detector mappings, LMI synthesis, Algorithm 1,
                     event-driven simulation, and shared plotting typography
 scripts/            Command-line entry points for Figures 2–6 and Table 2
 tests/              Model, detector, LMI, algorithm, and simulation tests
-results/data/       CSV costs and NPZ trajectories, statistics, coefficients,
-                    and experiment metadata
+results/data/       CSV costs and experiment metadata; NPZ Monte Carlo archives
+                    are generated locally by reproduction scripts and ignored by Git
 results/figures/    Generated PNG/PDF figures; development/ contains small-run views
-CITATION.cff        Reserved citation metadata file (currently an empty placeholder)
+CITATION.cff        Machine-readable software and preferred paper citation metadata
 ```
 
 ## Installation
@@ -76,7 +78,7 @@ python scripts/figure6_example2_errors.py --paths 100 --points 1001 --seed 12345
 
 ### Full reproduction runs
 
-These settings match the current full numerical archives: 101 values of
+These settings match the locally generated full numerical archives: 101 values of
 $\rho$ for Figure 2; 1000 paths and 1001 time points for Figure 3; and 1000 paths
 and 2001 time points for Figures 5 and 6.
 
@@ -131,8 +133,10 @@ the other published Example 2 data as reconstructed here. The default remains
 
 The values below are taken from
 [`figure2_example1.csv`](results/data/figure2_example1.csv),
-[`table2_example2.csv`](results/data/table2_example2.csv), and the saved NPZ
-archives. “Reported” denotes paper values, not independently recomputed
+[`table2_example2.csv`](results/data/table2_example2.csv), and NPZ archives
+generated locally by the reproduction scripts. These NPZ outputs are ignored
+by Git and are not version-controlled or distributed in this repository.
+“Reported” denotes paper values, not independently recomputed
 benchmarks. Optimization costs are $\gamma$, not $\gamma^2$.
 
 | Result | Reported in the paper | Recomputed/stored in this repository | Assessment |
@@ -222,16 +226,25 @@ all published numerical results.
 
 ## Citation
 
-Please cite the paper when using this implementation:
+**Original research paper (preferred scientific citation)**
+
+Please cite the original paper when using this implementation:
 
 > Caio César Graciani Rodrigues, Marcos Garcia Todorov, and Marcelo Dutra Fragoso.
 > “Detector-based approach for H-infinity filtering of Markov jump linear systems
 > with partial mode information.” *IET Control Theory & Applications*.
 > DOI: [10.1049/iet-cta.2018.5640](https://doi.org/10.1049/iet-cta.2018.5640).
 
-[`CITATION.cff`](CITATION.cff) is reserved for machine-readable citation metadata
-and is currently an empty placeholder. Use the paper citation above until that
-file is populated.
+**Software archive**
+
+To cite this software implementation and its archived release:
+
+> C. C. Graciani Rodrigues, M. G. Todorov, and M. D. Fragoso.
+> Detector-based H-infinity filtering for Markov jump linear systems, version 1.0.1.
+> Zenodo. DOI: [10.5281/zenodo.22938714](https://doi.org/10.5281/zenodo.22938714).
+
+GitHub can use [`CITATION.cff`](CITATION.cff) to provide machine-readable citation
+metadata for the software archive and the preferred scientific citation above.
 
 ## License
 
