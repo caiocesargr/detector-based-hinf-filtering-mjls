@@ -16,6 +16,8 @@ matplotlib.use("Agg")  # Save figures without requiring a graphical display.
 import matplotlib.pyplot as plt
 import numpy as np
 
+from detector_hinf.plotting import FIGURE_STYLE
+
 from detector_hinf.lmi import solve_theorem1_example1
 
 
@@ -73,14 +75,7 @@ def plot_results(rows, figures_dir):
     if not np.any(np.isfinite(gamma)):
         raise RuntimeError("No finite Theorem 1 costs were obtained; see the CSV and solver errors.")
     figures_dir.mkdir(parents=True, exist_ok=True)
-    with plt.rc_context({
-        "font.family": "serif",
-        "font.size": 11,
-        "axes.labelsize": 12,
-        "legend.fontsize": 9,
-        "pdf.fonttype": 42,
-        "savefig.dpi": 300,
-    }):
+    with plt.rc_context(FIGURE_STYLE):
         fig, ax = plt.subplots(figsize=(6.4, 4.2), constrained_layout=True)
         ax.plot(rho, gamma, color="black", linewidth=1.8, label="Theorem 1")
         ax.axhline(MODE_INDEPENDENT_REPORTED, color="0.45", linestyle="--",
@@ -91,7 +86,7 @@ def plot_results(rows, figures_dir):
             ax.scatter(rho[selected], gamma[selected], s=48, facecolors="white",
                        edgecolors="black", linewidths=1.4, zorder=3, clip_on=False)
         ax.set_xlabel(r"$\rho$")
-        ax.set_ylabel(r"Guaranteed $H_\infty$ cost $\gamma$")
+        ax.set_ylabel(r"$\gamma$")
         ax.set_xlim(0.0, 1.0)
         ax.set_ylim(bottom=0.0)
         ax.grid(True, color="0.9", linewidth=0.6)

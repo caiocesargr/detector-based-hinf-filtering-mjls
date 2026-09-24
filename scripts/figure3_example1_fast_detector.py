@@ -19,6 +19,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from detector_hinf.plotting import FIGURE_STYLE, SAMPLE_SD_LABEL, TIME_LABEL
+
 from detector_hinf.detector import build_augmented_generator
 from detector_hinf.lmi import solve_theorem1_example1
 from detector_hinf.models import (
@@ -101,27 +103,24 @@ def save_results(data, results_dir):
     data_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(data_dir / "figure3_example1.npz", **data)
-    with plt.rc_context({
-        "font.family": "serif", "font.size": 11, "axes.labelsize": 12,
-        "legend.fontsize": 9, "pdf.fonttype": 42, "savefig.dpi": 300,
-    }):
+    with plt.rc_context(FIGURE_STYLE):
         fig, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(10.0, 4.0), constrained_layout=True)
         t = data["t"]
         ax_a.plot(t, data["mean_zhat_a"], color="black", linestyle="-",
                   linewidth=1.6, label=r"$\mathbb{E}[\hat z_a(t)]$ — filter (6)")
         ax_a.plot(t, data["mean_zhat_b"], color="black", linestyle="--",
                   linewidth=1.6, label=r"$\mathbb{E}[\hat z_b(t)]$ — filter (7)")
-        ax_a.set_title("(a) Mean filter estimates")
-        ax_a.set_ylabel(r"Mean estimate $\hat z(t)$")
+        ax_a.set_title("(a) Filter estimates")
+        ax_a.set_ylabel(r"Estimated output")
         ax_b.fill_between(t, data["error_band_lower"], data["error_band_upper"],
-                          color="0.8", label=r"Mean $\pm$ one standard deviation")
+                          color="0.8", label=SAMPLE_SD_LABEL)
         ax_b.plot(t, data["mean_error_sq"], color="black", linestyle="-",
                   linewidth=1.6, label="Mean squared difference")
-        ax_b.set_title("(b) Squared difference between filters")
+        ax_b.set_title("(b) Squared difference")
         ax_b.set_ylabel(r"$\|\hat z_a(t)-\hat z_b(t)\|^2$")
         ax_b.set_ylim(bottom=0.0)
         for ax in (ax_a, ax_b):
-            ax.set_xlabel("Time (s)")
+            ax.set_xlabel(TIME_LABEL)
             ax.set_xlim(0.0, data["T"])
             ax.grid(True, color="0.9", linewidth=0.6)
             ax.legend(loc="best", frameon=False)

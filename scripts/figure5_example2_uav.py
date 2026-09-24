@@ -6,8 +6,10 @@ uses pointwise Monte Carlo means for reproducibility.
 
 Run after pip install -e .; for development use --paths 5 --points 501.
 The NPZ stores individual pitch/estimate trajectories, means, sample variances,
-filter coefficients, and experiment metadata. Published coefficients are the
-reported equations (31)--(34), not coefficients recomputed by this script.
+filter coefficients, and experiment metadata. Both filters are computed by
+default. --algorithm1-source published uses equations (31)--(34) only as a
+reference reproduction attempt: these coefficients did not reproduce the
+reported Monte Carlo behavior with the other published Example 2 data.
 """
 
 import argparse
@@ -18,6 +20,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+
+from detector_hinf.plotting import FIGURE_STYLE, TIME_LABEL, panel_titles
 
 from detector_hinf.algorithm1 import solve_algorithm1_example2
 from detector_hinf.detector import build_augmented_generator
@@ -31,7 +35,7 @@ from detector_hinf.simulation import simulate_ctmc, simulate_example2_dynamics
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
 
 
-def run_monte_carlo(paths=1000, points=2001, seed=12345, algorithm1_source="published"):
+def run_monte_carlo(paths=1000, points=2001, seed=12345, algorithm1_source="computed"):
     """Design filters once, then use exactly the same CTMC path for both."""
     if paths < 1 or points < 2 or seed < 0:
         raise ValueError("Require paths >= 1, points >= 2 and seed >= 0.")
@@ -46,6 +50,8 @@ def run_monte_carlo(paths=1000, points=2001, seed=12345, algorithm1_source="publ
         if not algorithm["converged"]:
             raise RuntimeError(f"Algorithm 1 did not converge: {algorithm['status']}")
     else:
+        # Reference only: the published coefficients did not reproduce the
+        # reported Monte Carlo behavior with the other published Example 2 data.
         algorithm = example2_published_algorithm1_filter()
     print(f"Algorithm 1 coefficients: {algorithm1_source}", flush=True)
     horizon, epsilon = 50., 0.0075
@@ -109,11 +115,10 @@ def save_results(data, results_dir):
     data_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(data_dir / "figure5_example2_uav.npz", **data)
-    with plt.rc_context({"font.family": "serif", "font.size": 11,
-                         "pdf.fonttype": 42, "savefig.dpi": 300}):
+    with plt.rc_context(FIGURE_STYLE):
         fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True, sharey=True,
                                  constrained_layout=True)
-        for ax, label, key in zip(axes, ("(a) Theorem 1", "(b) Algorithm 1"),
+        for ax, label, key in zip(axes, panel_titles(data["algorithm1_source"]),
                                   ("theorem1", "algorithm1")):
             ax.plot(data["t"], data["mean_x4"], color="black", linestyle="-",
                     linewidth=1.5, label=r"Mean $x_4(t)$")
@@ -121,12 +126,11 @@ def save_results(data, results_dir):
                     linewidth=1.5, label=r"Mean $\hat z(t)$")
             ax.axvline(45., color="0.5", linestyle=":", linewidth=1)
             ax.set_title(label)
-            ax.set_xlabel("Time (s)")
+            ax.set_xlabel(TIME_LABEL)
             ax.set_xlim(0., 50.)
             ax.grid(True, color="0.9", linewidth=.6)
             ax.legend(frameon=False)
         axes[0].set_ylabel("Pitch angle / estimate")
-        fig.suptitle(f"Pointwise Monte Carlo means — Algorithm 1: {data['algorithm1_source']}")
         stem = figures_dir / "figure5_example2_uav"
         fig.savefig(stem.with_suffix(".png"))
         fig.savefig(stem.with_suffix(".pdf"))
@@ -139,7 +143,8 @@ def main(argv=None):
     parser.add_argument("--paths", type=int, default=1000)
     parser.add_argument("--points", type=int, default=2001)
     parser.add_argument("--seed", type=int, default=12345)
-    parser.add_argument("--algorithm1-source", choices=("computed", "published"), default="published")
+    parser.add_argument("--algorithm1-source", choices=("computed", "published"), default="computed",
+                        help="Algorithm 1 coefficients (default: computed; published is reference only)")
     args = parser.parse_args(argv)
     if args.paths < 1 or args.points < 2 or args.seed < 0:
         parser.error("Require --paths >= 1, --points >= 2 and --seed >= 0.")

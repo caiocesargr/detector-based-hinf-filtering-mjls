@@ -17,6 +17,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from detector_hinf.plotting import FIGURE_STYLE, TIME_LABEL
+
 from detector_hinf.detector import build_augmented_generator
 from detector_hinf.models import (
     example2_detector_generators,
@@ -62,10 +64,7 @@ def save_results(data, results_dir):
     times = np.append(data["jump_times"], data["T"])
     theta = np.append(data["theta"], data["theta"][-1]) + 1
     detector = np.append(data["detector_symbol"], data["detector_symbol"][-1]) + 1
-    with plt.rc_context({
-        "font.family": "serif", "font.size": 11, "axes.labelsize": 12,
-        "pdf.fonttype": 42, "savefig.dpi": 300,
-    }):
+    with plt.rc_context(FIGURE_STYLE):
         fig, (ax_top, ax_bottom) = plt.subplots(
             2, 1, sharex=True, figsize=(8.0, 4.5), constrained_layout=True,
         )
@@ -74,10 +73,10 @@ def save_results(data, results_dir):
         ax_top.set_yticks([1, 2])
         ax_top.set_ylim(0.8, 2.2)
         ax_bottom.step(times, detector, where="post", color="black", linewidth=0.9)
-        ax_bottom.set_ylabel(r"$\hat\theta^\epsilon(t)$")
+        ax_bottom.set_ylabel(r"$\hat{\theta}^{\varepsilon}(t)$")
         ax_bottom.set_yticks([1, 2, 3])
         ax_bottom.set_ylim(0.8, 3.2)
-        ax_bottom.set_xlabel("Time (s)")
+        ax_bottom.set_xlabel(TIME_LABEL)
         for ax in (ax_top, ax_bottom):
             ax.set_xlim(0.0, data["T"])
             ax.grid(True, color="0.9", linewidth=0.6)
